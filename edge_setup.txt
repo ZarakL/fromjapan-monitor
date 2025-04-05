@@ -1,0 +1,42 @@
+# Instructions for Chromium WebDriver setup
+
+## Chromium Installation (C:\chrome-win)
+1. Your Chromium is already installed at C:\chrome-win
+2. Download ChromeDriver matching your Chromium version from https://chromedriver.chromium.org/downloads
+3. Place chromedriver.exe at C:/chromedriver.exe
+
+## Find your Chromium version:
+1. Open cmd prompt and run: `C:\chrome-win\chrome.exe --version`
+2. The output will show something like "Chromium 96.0.4664.45"
+3. Download the matching ChromeDriver version from https://chromedriver.chromium.org/downloads
+
+## ChromeDriver setup
+1. Download the ChromeDriver version that matches your Chromium version EXACTLY
+2. Place chromedriver.exe at C:/chromedriver.exe
+3. The script is configured to find Chromium at C:\chrome-win\chrome.exe
+
+## Troubleshooting WebDriver Issues
+- If you encounter any issues with the webdriver:
+  a) Ensure Chromium and ChromeDriver versions match exactly
+  b) Try updating both to the latest version
+  c) Check if Chromium can be launched manually: `C:\chrome-win\chrome.exe`
+  d) Make sure Visual C++ Redistributable is installed (required by ChromeDriver)
+
+## Installation commands to run on Windows server
+# Install dependencies:
+pip install selenium==4.9.1 bs4 deep_translator requests psutil
+
+# Restart any chrome.exe processes that might be hanging:
+taskkill /F /IM chrome.exe
+
+## Script Configuration 
+- Default ChromeDriver path is C:/chromedriver.exe
+- Script is configured to use Chromium from C:\chrome-win\chrome.exe
+- USE_CHROMIUM is set to True to enable Chromium usage
+
+## Note on headless mode
+Chromium in headless mode is much more efficient than regular Chrome:
+- Uses less memory
+- Consumes fewer CPU resources
+- Doesn't display any windows on the remote server
+- Better performance overall
