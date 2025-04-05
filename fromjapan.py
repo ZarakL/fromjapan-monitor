@@ -153,27 +153,55 @@ def get_driver():
     else:
         logging.warning(f"Chromium not found at {chromium_path}, falling back to system Chrome")
     
-    # Set headless mode - true headless mode
-    options.add_argument("--headless")
+    # Use proper headless mode with stability enhancements
+    # For Chrome/Chromium 108+, we need to use --headless=new
+    options.add_argument("--headless=new")  # More stable new headless implementation
     
-    # Core stability options 
+    # Core stability options - expanded with more settings to prevent crashes
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=800,600")
+    options.add_argument("--window-size=1280,1024")  # Larger window size helps stability
     
-    # Memory optimization options
+    # Headless-specific stability flags
+    options.add_argument("--disable-dev-shm-usage")  # Critical for headless in containers
+    options.add_argument("--remote-debugging-port=9222")  # Helps with stability
+    options.add_argument("--disable-background-networking")
+    options.add_argument("--disable-default-apps")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-sync")
+    options.add_argument("--disable-translate")
+    options.add_argument("--metrics-recording-only")
+    options.add_argument("--mute-audio")
+    options.add_argument("--no-first-run")
+    
+    # Additional memory settings to improve stability
     options.add_argument("--disable-extensions")
     options.add_argument("--disable-plugins")
     options.add_argument("--disable-notifications")
     options.add_argument("--incognito")
+    options.add_argument("--disable-popup-blocking")
     
-    # Disable Chrome's process sandboxing for better stability
+    # Process isolation - critical for stability in headless mode
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-setuid-sandbox")
     
-    # Disable images for faster operation
-    options.add_argument("--blink-settings=imagesEnabled=false")
+    # Memory settings to avoid tab crashes in headless mode
+    options.add_argument("--disable-infobars")
+    options.add_argument("--js-flags=--max_old_space_size=2048")  # Increase JS memory limit
+    options.add_argument("--memory-pressure-off")  # Disable memory pressure handling
+    options.add_argument("--deterministic-mode")   # More stable but slower
+    
+    # Experimental options to improve stability
+    options.add_experimental_option("prefs", {
+        "profile.default_content_setting_values.images": 2,  # Don't load images
+        "profile.default_content_setting_values.cookies": 1, # Accept cookies
+        "profile.managed_default_content_settings.javascript": 1,  # Enable JavaScript
+        "profile.managed_default_content_settings.plugins": 1,     # Enable plugins
+    })
+    
+    # Only disable images if necessary - sometimes this can cause issues
+    # options.add_argument("--blink-settings=imagesEnabled=false")
     
     # Add Chrome-specific stability settings
     options.add_experimental_option("excludeSwitches", ["enable-logging"])
@@ -183,15 +211,33 @@ def get_driver():
     global active_chrome_driver
     
     try:
-        # Create the service with chromedriver path
+        # Create the service with chromedriver path, add more logging
         service = ChromeService(CHROMEDRIVER_PATH)
+        logging.info("Setting up Chrome with adjusted parameters for stability")
+        
+        # Initialize the driver with our options
         driver = webdriver.Chrome(service=service, options=options)
-        driver.set_page_load_timeout(30)  # Increased from 20 to 30 seconds
-        driver.set_script_timeout(20)     # Increased from 15 to 20 seconds
+        
+        # Set very generous timeouts to prevent tab crashed errors
+        driver.set_page_load_timeout(60)  # Increase to 60 seconds for slow connections
+        driver.set_script_timeout(30)     # Increase to 30 seconds for slow script execution
+        
+        # Additional initialization to improve stability
+        driver.implicitly_wait(10)        # Wait up to 10 seconds when looking for elements
+        
+        # Headless-specific initialization
+        try:
+            # Prime the browser with a simple operation 
+            driver.get("about:blank")
+            driver.execute_script("return navigator.userAgent")
+            # Set window size explicitly again to ensure it took effect
+            driver.set_window_size(1280, 1024)
+        except:
+            logging.warning("Initial browser priming failed, continuing anyway")
         
         # Store in global reference
         active_chrome_driver = driver
-        logging.info("Successfully created Chrome driver")
+        logging.info("Successfully created Chrome driver with enhanced stability settings")
         return driver
     except Exception as e:
         logging.error(f"First Chrome driver attempt failed: {e}")
@@ -445,9 +491,9 @@ def scrape_and_filter_items(driver):
         total_processed = 0
         brand_stats = {group: 0 for group in SEARCH_TERMS.keys()}
         
-        # Balance driver refresh rate for Chrome (more stable than Edge)
+        # More frequent driver refreshes to prevent tab crashes
         search_counter = 0
-        driver_refresh_interval = 3  # Refresh driver every 3 searches (Chrome is more stable)
+        driver_refresh_interval = 2  # Refresh driver every 2 searches to avoid memory issues
         
         for search in interleaved_combinations:
             # Recreate driver periodically to prevent memory leaks
@@ -491,10 +537,29 @@ def scrape_and_filter_items(driver):
             
             try:
                 # Navigation with extensive error handling
-                for nav_attempt in range(3):  # Try up to 3 times to load the page
+                for nav_attempt in range(5):  # Try up to 5 times to load the page (increased from 3)
                     try:
                         logging.info(f"Navigating to {search_url} (attempt {nav_attempt+1})")
-                        driver.get(search_url)
+                        
+                        # First clear the browser state
+                        if nav_attempt > 0:
+                            # Only do this on retry attempts
+                            try:
+                                driver.get("about:blank")
+                                driver.delete_all_cookies()
+                                driver.execute_script("window.localStorage.clear();")
+                                driver.execute_script("window.sessionStorage.clear();")
+                                time.sleep(1)  # Brief pause between reset and new request
+                            except:
+                                pass
+                        
+                        # Use JavaScript to navigate - sometimes more reliable than driver.get()
+                        try:
+                            driver.execute_script(f"window.location.href = '{search_url}';")
+                            time.sleep(3)  # Give it time to start loading
+                        except:
+                            # Fall back to regular get method if JS fails
+                            driver.get(search_url)
                         
                         # Wait with improved loading strategy
                         try:
@@ -802,12 +867,20 @@ if __name__ == "__main__":
         logging.info(f"Found Chromium at {chromium_path}, using it directly...")
         
         try:
-            # Create options specifically for Chromium
+            # Create options specifically for Chromium with improved stability
             options = ChromeOptions()
             options.binary_location = chromium_path
-            options.add_argument("--headless")
+            
+            # Use proper headless mode for validation
+            options.add_argument("--headless=new")  # Newer headless implementation is more stable
+            
+            # Essential stability options
             options.add_argument("--disable-gpu")
             options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--window-size=1280,1024")
+            options.add_argument("--disable-features=NetworkService")
+            options.add_argument("--disable-features=VizDisplayCompositor")
             options.add_experimental_option("excludeSwitches", ["enable-logging"])
             
             # Create direct service with ChromeDriver
@@ -829,7 +902,15 @@ if __name__ == "__main__":
         # Fall back to regular Chrome with minimal validation
         try:
             options = ChromeOptions()
+            # Use proper headless mode for system Chrome
             options.add_argument("--headless=new")
+            
+            # Add essential stability options for system Chrome
+            options.add_argument("--disable-gpu")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-features=NetworkService")
+            
             test_driver = webdriver.Chrome(options=options)
             version = test_driver.capabilities.get('browserVersion', 'unknown')
             logging.info(f"System Chrome validation successful - Version: {version}")
