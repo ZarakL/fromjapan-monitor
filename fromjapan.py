@@ -12,7 +12,7 @@ import signal
 import subprocess
 from datetime import datetime
 
-# Set up logging to a file instead of console output
+# Configure logging to file for monitoring operations
 logging.basicConfig(
     filename='fromjapan_monitor.log',
     level=logging.INFO,
@@ -20,7 +20,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-# Selenium imports 
+# Selenium WebDriver imports for browser automation
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options as ChromeOptions
@@ -28,25 +28,36 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# BeautifulSoup for HTML parsing
+# BeautifulSoup for parsing HTML content
 from bs4 import BeautifulSoup
 
-# Translation library
+# Google Translate API for Japanese to English translation
 from deep_translator import GoogleTranslator
 
-# Disable selenium logging
+# Suppress verbose Selenium logging
 from selenium.webdriver.remote.remote_connection import LOGGER
 LOGGER.setLevel(logging.WARNING)
 
-# --- SETTINGS ---
+# Configuration Settings
 WEBHOOKS = {
     "lizlisa": "https://discord.com/api/webhooks/1356396545213337650/HIMoQICLasRuvHsDq67Sj-LCCxi76s6VUagGHWEEJgwYhX5_HDjiqNmp92F3XGASCDqJ",
     "axesfemme": "https://discord.com/api/webhooks/1356441958318342264/cvUotMmo48zst3_DQFJxy1hVMUgFNJ5CPESFUyFyKmF48b1HiKGdbFJInWLt7ZEyJA_r",
     "lizlisa_nofilter": "https://discord.com/api/webhooks/1356898381288443994/hH-O02qa_k3lF3lrcF5BF0y8nNPstpsSBb72ke_sYBmGLE_Iikjng0zNajDD0pUuV7RV",
-    "axesfemme_nofilter": "https://discord.com/api/webhooks/1356898428486946958/WJ74ZUmuAF5PJML3LJAepDMQZZyeCmkJL08FU9eJMoMwbO6-EHZ2d2rjdMit1GXgbeVn"
+    "axesfemme_nofilter": "https://discord.com/api/webhooks/1356441958318342264/cvUotMmo48zst3_DQFJxy1hVMUgFNJ5CPESFUyFyKmF48b1HiKGdbFJInWLt7ZEyJA_r",
+    "axesfemme_dress_black": "https://discord.com/api/webhooks/1356898428486946958/WJ74ZUmuAF5PJML3LJAepDMQZZyeCmkJL08FU9eJMoMwbO6-EHZ2d2rjdMit1GXgbeVn",
+    "btssb_under50": "https://discord.com/api/webhooks/1364376970816786493/aoPnsKf3hzdlP60F_rhKw0vzvDt5NNhBhUl0F5caik6NIyB6Yous8CAzfYxZNHiOz2Gb",
+    "hnaoto_under50": "https://discord.com/api/webhooks/1364376966215766036/MUK3S5p1zoWLPq6BwAsaZZANdo8WlZuH-tU0iLvB5aC-z72cnDufc9MKsXJjjqUnS4bu",
+    "ap_under50": "https://discord.com/api/webhooks/1364376974008651867/ttekr6hFh7UUrKO3OCSoouBoLm7h9pj0Yuu9mIXmIg-1J9F8g_z84NfStgLF0rRtjiqk",
+    "mymelody": "https://discord.com/api/webhooks/1364861578025107507/EK5RLJAcQAkDldeyj-bNakst1kBy2Og4l49kGC4Z-TN0bbgGg5VRX9pdp6YXXxXTsJks"
 }
+# Japanese search terms organized by brand category
 SEARCH_TERMS = {
-    "lizlisa": ["リズリサ スカパン", "リズリサ キュロット", "リズリサ ホワイト スカパン", "リズリサ 白 スカパン"],
+    "lizlisa": ["リズリサ スカパン", "リズリサ キュロット"],  # Brown filter applied to these
+    "lizlisa_nofilter": [
+        "リズリサ ホワイト スカパン", 
+        "リズリサ 白 スカパン",
+        "リズリサ"
+    ],
     "axesfemme": [
         "アクシーズファム ブラウス 茶色",
         "アクシーズファム ブラウス ブラウン",
@@ -54,61 +65,120 @@ SEARCH_TERMS = {
         "アクシーズファム レース ブラウス 茶色",
         "アクシーズファム ブラウス"
     ],
-    "lizlisa_nofilter": [
-        "リズリサ"
-    ],
     "axesfemme_nofilter": [
         "アクシーズファム カットソー",
         "アクシーズファム ブラウス",
         "アクシーズファム 半袖 ブラウス",
         "アクシーズファム レース 半袖 ブラウス",
         "アクシーズファム 半袖 カットソー"
+    ],
+    "axesfemme_dress_black": [
+        "アクシーズファム ワンピース",
+        "アクシーズファム レース ワンピース",
+        "アクシーズファム フリル ワンピース",
+        "アクシーズファム キャミソール ワンピース"
+    ],
+    "btssb_under50": ["baby the stars shine bright", "btssb"],
+    "hnaoto_under50": ["h.naoto", "H.NAOTO", "h. naoto", "h naoto", "hnaoto"],
+    "ap_under50": ["angelic pretty"],
+    "mymelody": [
+        "マイメロ ぬいぐるみ",
+        "マイメロディ 昔のグッズ",
+        "マイメロディ マスコット",
+        "ブラインドボックス",
+        "スミスキー フィギュア",
+        "チャーム 人形 頭",
+        "ブライス ステッカ"
     ]
 }
+# Additional keywords for Axes Femme filtering
 AXESFEMME_EXTRA_KEYWORDS = ["フリル", "リボン", "半袖"]
 
-# Special search terms that don't need keyword filtering
+# Keywords for identifying black-colored items
+BLACK_COLOR_KEYWORDS = ["黒", "くろ", "クロ", "ブラック", "ブラック系", "黒系", "BLACK"]
+
+# Filter patterns to exclude unrelated NAOTO items (music artist, etc.)
+HNAOTO_EXCLUDE_PATTERNS = [
+    "NAOTO BEST", "NAOTO / EXILE", "NAOTO／EXILE", "NAOTO CD", "NAOTO DVD", 
+    "CD／NAOTO", "CD/NAOTO", "NAOTO LIVE", "/NAOTO", "／NAOTO", "NAOTO　",
+    "NAOTO TOUR", "NAOTO Supervised", "NAOTO著", "NAOTO監修", "Gift／NAOTO", "Gift/NAOTO"
+]
+
+# Terms that bypass additional color/keyword filtering
 NO_FILTER_TERMS = [
+    # All lizlisa_nofilter terms
     "リズリサ ホワイト スカパン", 
     "リズリサ 白 スカパン",
-    # All lizlisa_nofilter terms
     "リズリサ",
     # All axesfemme_nofilter terms
     "アクシーズファム カットソー",
     "アクシーズファム ブラウス",
     "アクシーズファム 半袖 ブラウス",
     "アクシーズファム レース 半袖 ブラウス",
-    "アクシーズファム 半袖 カットソー"
+    "アクシーズファム 半袖 カットソー",
+    # Specific axesfemme_dress_black terms that don't need filtering
+    "アクシーズファム キャミソール ワンピース",
+    # All btssb_under50 terms
+    "baby the stars shine bright",
+    "btssb",
+    # All hnaoto_under50 terms
+    "h.naoto",
+    "H.NAOTO",
+    "h. naoto",
+    "h naoto",
+    "hnaoto",
+    # All ap_under50 terms
+    "angelic pretty",
+    # All mymelody terms
+    "マイメロ ぬいぐるみ",
+    "マイメロディ 昔のグッズ",
+    "マイメロディ マスコット",
+    "ブラインドボックス",
+    "スミスキー フィギュア",
+    "チャーム 人形 頭",
+    "ブライス ステッカ"
 ]
+# Base URLs and sort parameters for each shopping platform
 BASE_URLS = {
     "mercari": ("https://www.fromjapan.co.jp/japan/en/mercari/search/", "?sort_order=new"),
     "rakuten": ("https://www.fromjapan.co.jp/japan/en/rakuten/search/", "?sort_order=-updateDate"),
     "rakuma":  ("https://www.fromjapan.co.jp/japan/en/rakuma/search/", "?sort_order=new")
 }
-# Path to ChromeDriver (works with both Chrome and Chromium)
+# ChromeDriver configuration
 CHROMEDRIVER_PATH = "C:/chromedriver.exe"
-# Set to True to use Chromium instead of Chrome if available
-USE_CHROMIUM = True
+# Browser preference setting
+USE_CHROMIUM = True  # Prefer Chromium over standard Chrome
+# Determine base directory for seen URLs cache file
 if getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.dirname(sys.executable)
+    BASE_DIR = os.path.dirname(sys.executable)  # For compiled executable
 else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # For script execution
 SEEN_FILE = os.path.join(BASE_DIR, "seen_urls.json")
 
-BROWN_KEYWORDS = [
+# Brown color keywords organized by specificity
+GENERIC_BROWN_KEYWORDS = [
     "brown", "chocolate", "choco", "choco-iro", "mocha", "cocoa", "beige", "tan",
-    "ブラウン", "チョコ", "チョコ色", "チョコレート", "モカ", "ココア", "ベージュ", "茶色",
+    "ブラウン", "チョコ", "チョコ色", "チョコレート", "モカ", "ココア", "ベージュ", "茶色"
+]
+
+# Brand-specific brown keyword variations
+LIZLISA_BROWN_KEYWORDS = [
     "リズリサ ブラウン スカパン", "リズリサ 茶色 スカパン", "リズリサ チョコ スカパン",
-    "リズリサ ブラウン キュロット", "リズリサ 茶色 キュロット", "リズリサ チョコ キュロット",
-    "アクシーズファム ブラウス 茶色", "アクシーズファム ブラウス ブラウン", "アクシーズファム 茶 ブラウス",
-    "アクシーズファム レース ブラウス 茶色"
+    "リズリサ ブラウン キュロット", "リズリサ 茶色 キュロット", "リズリサ チョコ キュロット"
+]
+
+# Axes Femme brown keyword combinations
+AXESFEMME_BROWN_KEYWORDS = [
+    "アクシーズファム ブラウス 茶色", "アクシーズファム ブラウス ブラウン", 
+    "アクシーズファム 茶 ブラウス", "アクシーズファム レース ブラウス 茶色"
 ]
 
 def load_seen_urls():
+    """Load previously seen URLs from cache file to prevent duplicate notifications"""
     try:
         if os.path.exists(SEEN_FILE):
             file_time = os.path.getmtime(SEEN_FILE)
-            # Only reset cache if it's older than 24 hours
+            # Reset cache daily to prevent it from growing too large
             if datetime.now().timestamp() - file_time > 86400:
                 os.rename(SEEN_FILE, f"{SEEN_FILE}.bak")
                 return set()
@@ -124,6 +194,7 @@ def load_seen_urls():
         return set()
 
 def save_seen_urls(seen):
+    """Save current seen URLs to cache file with backup"""
     try:
         # Create a backup of the existing file if it exists
         if os.path.exists(SEEN_FILE):
@@ -140,11 +211,11 @@ def save_seen_urls(seen):
         print(f"❌ Error saving cache: {e}")
 
 def get_driver():
-    """Create a Chromium WebDriver with headless mode for maximum stability"""
-    # Use Chrome options with headless mode
+    """Initialize Chrome WebDriver with optimized settings for web scraping"""
+    # Use Chrome options with simplified settings for stability
     options = ChromeOptions()
     
-    # Always use the specific Chromium binary path
+    # Check for Chromium, but make it optional
     chromium_path = "C:/chrome-win/chrome.exe"
     
     if os.path.exists(chromium_path):
@@ -153,59 +224,44 @@ def get_driver():
     else:
         logging.warning(f"Chromium not found at {chromium_path}, falling back to system Chrome")
     
-    # Use proper headless mode with stability enhancements
-    # For Chrome/Chromium 108+, we need to use --headless=new
-    options.add_argument("--headless=new")  # More stable new headless implementation
+    # Use a more stealth headless approach
+    options.add_argument("--headless=new")
     
-    # Core stability options - expanded with more settings to prevent crashes
+    # Add anti-detection measures for headless mode
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    
+    # Core stability options - only the essential ones
     options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
+    options.add_argument("--no-sandbox") 
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1280,1024")  # Larger window size helps stability
+    options.add_argument("--window-size=1280,1024")
     
-    # Headless-specific stability flags
-    options.add_argument("--disable-dev-shm-usage")  # Critical for headless in containers
-    options.add_argument("--remote-debugging-port=9222")  # Helps with stability
-    options.add_argument("--disable-background-networking")
-    options.add_argument("--disable-default-apps")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-sync")
-    options.add_argument("--disable-translate")
-    options.add_argument("--metrics-recording-only")
-    options.add_argument("--mute-audio")
-    options.add_argument("--no-first-run")
-    
-    # Additional memory settings to improve stability
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-plugins")
-    options.add_argument("--disable-notifications")
-    options.add_argument("--incognito")
-    options.add_argument("--disable-popup-blocking")
-    
-    # Process isolation - critical for stability in headless mode
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-setuid-sandbox")
-    
-    # Memory settings to avoid tab crashes in headless mode
-    options.add_argument("--disable-infobars")
-    options.add_argument("--js-flags=--max_old_space_size=2048")  # Increase JS memory limit
-    options.add_argument("--memory-pressure-off")  # Disable memory pressure handling
-    options.add_argument("--deterministic-mode")   # More stable but slower
-    
-    # Experimental options to improve stability
+    # Enable images to make sure products load properly, disable others for performance
     options.add_experimental_option("prefs", {
-        "profile.default_content_setting_values.images": 2,  # Don't load images
+        "profile.default_content_setting_values.images": 1,  # Load images
         "profile.default_content_setting_values.cookies": 1, # Accept cookies
         "profile.managed_default_content_settings.javascript": 1,  # Enable JavaScript
-        "profile.managed_default_content_settings.plugins": 1,     # Enable plugins
+        "profile.default_content_setting_values.notifications": 2,  # Block notifications
+        "profile.default_content_setting_values.plugins": 2,  # Block plugins
     })
     
     # Only disable images if necessary - sometimes this can cause issues
     # options.add_argument("--blink-settings=imagesEnabled=false")
     
-    # Add Chrome-specific stability settings
-    options.add_experimental_option("excludeSwitches", ["enable-logging"])
+    # Add Chrome-specific stability settings and anti-detection measures
+    options.add_experimental_option("excludeSwitches", ["enable-logging", "enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
+    
+    # Make the bot appear more like a regular browser
+    options.add_experimental_option("prefs", {
+        "credentials_enable_service": False,
+        "profile.password_manager_enabled": False,
+    })
+    
+    # Add extra JS to mask WebDriver presence
+    options.add_argument("--disable-web-security")
+    options.add_argument("--allow-running-insecure-content")
     
     # Global driver reference
     global active_chrome_driver
@@ -218,12 +274,12 @@ def get_driver():
         # Initialize the driver with our options
         driver = webdriver.Chrome(service=service, options=options)
         
-        # Set very generous timeouts to prevent tab crashed errors
-        driver.set_page_load_timeout(60)  # Increase to 60 seconds for slow connections
-        driver.set_script_timeout(30)     # Increase to 30 seconds for slow script execution
+        # Set extremely generous timeouts to prevent tab crashed errors
+        driver.set_page_load_timeout(120)  # Increase to 120 seconds for slow connections
+        driver.set_script_timeout(60)      # Increase to 60 seconds for slow script execution
         
         # Additional initialization to improve stability
-        driver.implicitly_wait(10)        # Wait up to 10 seconds when looking for elements
+        driver.implicitly_wait(30)        # Wait up to 30 seconds when looking for elements
         
         # Headless-specific initialization
         try:
@@ -258,6 +314,7 @@ def get_driver():
             raise Exception("Failed to initialize Chrome WebDriver")
 
 def send_to_discord(webhook_url, message, image_url=None):
+    """Send formatted message to Discord webhook with optional image embed"""
     try:
         payload = {"content": message}
         if image_url:
@@ -268,31 +325,138 @@ def send_to_discord(webhook_url, message, image_url=None):
         return None
 
 def translate_text(text):
+    """Translate Japanese text to English using Google Translate API"""
     try:
         return GoogleTranslator(source='ja', target='en').translate(text)
     except Exception as e:
         return f"[Translation failed: {e}]"
 
-def contains_brown_keyword(text):
-    lowered = text.lower()
-    return any(keyword.lower() in lowered for keyword in BROWN_KEYWORDS)
+def contains_black_keyword(title, description):
+    """Check if product contains black color keywords in title or description"""
+    """
+    Check if either title OR description contains any black color keywords.
+    
+    Args:
+        title: The item title text
+        description: The item description text
+        
+    Returns:
+        Boolean: True if either title or description contains a black color keyword
+    """
+    # Combine title and description to check both at once
+    combined_text = f"{title}\n{description}".lower()
+    
+    # Check for any black color keyword
+    for keyword in BLACK_COLOR_KEYWORDS:
+        if keyword in combined_text:
+            logging.info(f"Black color keyword match: {keyword}")
+            return True
+    
+    return False
+
+def is_valid_hnaoto_item(title, description=None):
+    """Validate if item with 'naoto' is actually h.naoto brand (not music artist)"""
+    """
+    Check if an item that contains 'naoto' is actually relevant to h.naoto fashion brand.
+    
+    Args:
+        title: The item title text
+        description: The item description text (optional)
+        
+    Returns:
+        Boolean: True if the item seems to be a legitimate h.naoto item, False if it's likely unrelated
+    """
+    # Quick check for direct h.naoto references that should always be included
+    h_naoto_patterns = ["h.naoto", "h. naoto", "h naoto", "hnaoto", "h/naoto", "H.NAOTO"]
+    
+    for pattern in h_naoto_patterns:
+        if pattern.lower() in title.lower():
+            return True
+            
+    # If it's just "naoto" without the "h", check if it matches any exclusion patterns
+    if "naoto" in title.lower() or "NAOTO" in title:
+        for exclude_pattern in HNAOTO_EXCLUDE_PATTERNS:
+            if exclude_pattern in title:
+                logging.info(f"Excluding item with pattern: {exclude_pattern} - Title: {title[:50]}")
+                return False
+                
+        # If we have a description, do more checking
+        if description:
+            # Description checks could be added here
+            # For now we're just using the title checks
+            pass
+            
+    # If we got here and no exclusion patterns matched, consider it valid
+    return True
+
+def contains_brown_keyword(title, description, group):
+    """Check for brown color keywords relevant to specific brand group"""
+    """
+    Check if either title OR description contains any brown keywords relevant for the specified group.
+    Different keyword lists are used depending on which brand group is being searched.
+    
+    Args:
+        title: The item title text
+        description: The item description text
+        group: The search group (lizlisa, axesfemme, etc.)
+        
+    Returns:
+        Boolean: True if either title or description contains a relevant brown keyword
+    """
+    # Combine title and description to check both at once
+    title_lower = title.lower()
+    desc_lower = description.lower()
+    
+    # Select the appropriate keyword list based on the group
+    if group == "lizlisa":
+        # For LizLisa, use generic brown keywords and LizLisa-specific brown keywords
+        keywords = GENERIC_BROWN_KEYWORDS + LIZLISA_BROWN_KEYWORDS
+    elif group == "axesfemme":
+        # For AxesFemme, use generic brown keywords and AxesFemme-specific brown keywords
+        keywords = GENERIC_BROWN_KEYWORDS + AXESFEMME_BROWN_KEYWORDS
+    else:
+        # For other groups, just use generic keywords
+        keywords = GENERIC_BROWN_KEYWORDS
+    
+    # Check if any keyword appears in either title OR description
+    for keyword in keywords:
+        keyword_lower = keyword.lower()
+        if keyword_lower in title_lower or keyword_lower in desc_lower:
+            logging.info(f"Brown keyword match for {group}: {keyword}")
+            if keyword_lower in title_lower:
+                logging.info(f"  Found in title: {keyword}")
+            if keyword_lower in desc_lower:
+                logging.info(f"  Found in description: {keyword}")
+            return True
+    
+    return False
 
 def extract_usd_price(jpy):
+    """Convert JPY price string to USD equivalent"""
     try:
         jpy_val = int(jpy.replace(",", ""))
         usd_val = round(jpy_val * 0.0069, 2)
-        return f"≈ {usd_val} USD"
+        return f"≈ {usd_val} USD", usd_val
     except:
-        return ""
+        return "", 0
 
 def process_search_results(driver, soup, site, term, group, webhook_url, seen_urls, new_seen):
+    """Process search results page and send qualifying items to Discord"""
     """Process search results page for a specific term and site"""
+    # Log the HTML structure to help with debugging if no items are found
+    if soup and soup.body:
+        logging.info(f"Page structure for {site}/{term}: {len(soup.body.text)} characters")
+        logging.info(f"Looking for shop-item divs...")
+        
+    # Look only for the known item class
     tiles = soup.find_all("div", class_="shop-item")
+    
     processed_count = 0
     
     for tile in tiles:
         title_tag = tile.find("a", class_="inline-block w-full text-black truncate text-sm")
         price_tag = tile.find("span", class_="text-2xl font-bold")
+        
         img_tag = tile.find("img")
         
         if not title_tag:
@@ -309,7 +473,7 @@ def process_search_results(driver, soup, site, term, group, webhook_url, seen_ur
         title = title_tag.get_text(strip=True)
         translated_title = translate_text(title)
         price = price_tag.get_text(strip=True) if price_tag else "N/A"
-        usd_price = extract_usd_price(price)
+        usd_price_str, usd_price_val = extract_usd_price(price)
         img_url = img_tag['src'] if img_tag else None
         
         # Get detailed page with proper resource management
@@ -380,29 +544,71 @@ def process_search_results(driver, soup, site, term, group, webhook_url, seen_ur
             except:
                 pass
         
-        combined_text = f"{title}\n{description}"
-        
         # Determine if the item should be sent
         filter_info = []
         
+        # Check if this is one of the "under $50" groups
+        is_under_50_group = group in ["btssb_under50", "hnaoto_under50", "ap_under50"]
+        under_50_filter_passed = usd_price_val <= 50.0 if is_under_50_group else True
+        
+        # Add h.naoto specific filtering
+        is_valid_naoto = True  # Default to valid
+        if group == "hnaoto_under50" and ("naoto" in title.lower() or "NAOTO" in title):
+            is_valid_naoto = is_valid_hnaoto_item(title, description)
+            if not is_valid_naoto:
+                filter_info.append("Excluded: Not a valid h.naoto item")
+                logging.info(f"Excluded non-h.naoto item: {title[:50]}")
+        
         # For no_filter webhooks, only send if the search term exactly matches what's specified
-        if "nofilter" in group:
-            # For these webhooks, only send results matching exactly their search terms
+        if "nofilter" in group or group == "mymelody":
+            # For these webhooks and the My Melody webhook, send results without additional filtering
             should_send = True
             filter_info.append(f"Search: {term}")
+        elif group == "axesfemme_dress_black":
+            # Check if this is a term that should be excluded from black color filtering
+            if term in NO_FILTER_TERMS:
+                # For specially marked terms, send without black color filtering
+                should_send = True
+                filter_info.append(f"Search: {term} (No Color Filter)")
+            else:
+                # For regular black Axes Femme dresses, only send if it contains black color keywords
+                matches_black = contains_black_keyword(title, description)
+                should_send = matches_black
+                filter_info.append(f"Search: {term}")
+                if matches_black:
+                    filter_info.append("Filter: Black")
+        elif is_under_50_group:
+            # For under $50 groups, only apply the price filter and h.naoto filter if applicable
+            should_send = under_50_filter_passed and is_valid_naoto
+            filter_info.append(f"Search: {term}")
+            filter_info.append(f"Price Filter: Under $50 USD")
         else:
-            # Normal filtering for other search terms
-            matches_brown = contains_brown_keyword(combined_text)
+            # Normal filtering for other search terms - check if title OR description contains keywords
+            matches_brown = contains_brown_keyword(title, description, group)
+            
+            # For AxesFemme, check for extra keywords in either title or description
+            combined_text = f"{title}\n{description}"
             matches_axes_extra = (
                 group == "axesfemme" and any(kw in combined_text for kw in AXESFEMME_EXTRA_KEYWORDS))
-            should_send = matches_brown or matches_axes_extra
+            
+            # Determine if we should send based on group and match criteria
+            if group == "lizlisa":
+                # For lizlisa, only send if it matches brown keywords
+                should_send = matches_brown
+            elif group == "axesfemme":
+                # For axesfemme, send if it matches brown keywords or extra keywords
+                should_send = matches_brown or matches_axes_extra
+            else:
+                # For other groups, follow default behavior
+                should_send = matches_brown or matches_axes_extra
             
             # Add filter info for display
             filter_info.append(f"Search: {term}")
             if matches_brown:
                 filter_info.append("Filter: Brown")
             if matches_axes_extra:
-                filter_info.append(f"Filter: Axes Femme Keywords ({', '.join([kw for kw in AXESFEMME_EXTRA_KEYWORDS if kw in combined_text])})")
+                matching_axes_keywords = [kw for kw in AXESFEMME_EXTRA_KEYWORDS if kw in combined_text]
+                filter_info.append(f"Filter: Axes Femme Keywords ({', '.join(matching_axes_keywords)})")
         
         # If item matches criteria, send to webhook
         if should_send:
@@ -414,7 +620,7 @@ def process_search_results(driver, soup, site, term, group, webhook_url, seen_ur
                 f"**Match:** {filter_display}\n"
                 f"**Title (JP):** {title}\n"
                 f"**Title (EN):** {translated_title}\n"
-                f"**Price:** {price} JPY ({usd_price})\n"
+                f"**Price:** {price} JPY ({usd_price_str})\n"
                 f"**Desc (JP):** {description[:200]}\n"
                 f"**Desc (EN):** {translated_desc[:200]}\n"
                 f"🔗 {full_url}")
@@ -435,6 +641,7 @@ def process_search_results(driver, soup, site, term, group, webhook_url, seen_ur
     return processed_count
 
 def scrape_and_filter_items(driver):
+    """Main scraping function that coordinates searches across all platforms and brands"""
     """Main function to scrape and filter items across all brands and sites
     
     Args:
@@ -493,7 +700,7 @@ def scrape_and_filter_items(driver):
         
         # More frequent driver refreshes to prevent tab crashes
         search_counter = 0
-        driver_refresh_interval = 2  # Refresh driver every 2 searches to avoid memory issues
+        driver_refresh_interval = 5  # Refresh driver every 5 searches to balance stability and performance
         
         for search in interleaved_combinations:
             # Recreate driver periodically to prevent memory leaks
@@ -561,39 +768,54 @@ def scrape_and_filter_items(driver):
                             # Fall back to regular get method if JS fails
                             driver.get(search_url)
                         
-                        # Wait with improved loading strategy
+                        # Extended waiting for page load - measure how long it actually takes
+                        load_start_time = time.time()
+                        max_wait_time = 60  # Maximum wait of 60 seconds per page
+                        
                         try:
-                            # Give more time for the main page to load (15 seconds)
-                            WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "shop-item")))
-                            logging.info("Found shop items successfully")
+                            # Very patient wait for shop items to appear (up to 60 seconds)
+                            logging.info("Starting extended page load wait...")
+                            WebDriverWait(driver, max_wait_time).until(EC.presence_of_element_located((By.CLASS_NAME, "shop-item")))
+                            
+                            load_time = time.time() - load_start_time
+                            logging.info(f"Page loaded successfully after {load_time:.2f} seconds")
                             break  # Success - exit the retry loop
                         except Exception as wait_err1:
-                            # Try with more generous fallback strategy
+                            # If we get here, we waited the full time and still no shop-items
+                            load_time = time.time() - load_start_time
+                            logging.warning(f"Page did not load items after {load_time:.2f} seconds: {wait_err1}")
+                            
+                            # Final fallback - check if we have any content at all
                             try:
-                                # Wait for basic page structure
-                                if nav_attempt < 2:  # Not last attempt yet
-                                    logging.info("Waiting longer for page to load...")
-                                    time.sleep(5)  # Wait 5 seconds
+                                # Wait for any content to appear
+                                if len(driver.page_source) > 10000:
+                                    logging.info(f"Page has some content after {load_time:.2f} seconds, proceeding anyway")
+                                    break
+                                elif nav_attempt < 2:  # Not the last attempt
+                                    # Try one more time with a refresh
+                                    logging.info("Refreshing page for another attempt...")
+                                    driver.refresh()
                                     
-                                    # Check for any significant content after waiting
-                                    if len(driver.page_source) > 5000:
-                                        logging.info("Page has loaded with content after waiting")
+                                    # Wait again with same patience
+                                    refresh_start_time = time.time()
+                                    try:
+                                        WebDriverWait(driver, max_wait_time).until(EC.presence_of_element_located((By.CLASS_NAME, "shop-item")))
+                                        refresh_time = time.time() - refresh_start_time
+                                        total_time = time.time() - load_start_time
+                                        logging.info(f"Page loaded after refresh in {refresh_time:.2f} seconds (total {total_time:.2f}s)")
                                         break
-                                    else:
-                                        # Try a reload if still not enough content
-                                        driver.refresh()
-                                        time.sleep(3)
-                                        logging.info("Page refreshed, checking again")
-                                        
-                                        # Final check after refresh
-                                        if len(driver.page_source) > 5000:
-                                            logging.info("Page has content after refresh")
-                                            break
-                                        else:
-                                            raise Exception("Page still missing content after refresh")
+                                    except:
+                                        refresh_time = time.time() - refresh_start_time
+                                        logging.warning(f"Page still not loading after refresh ({refresh_time:.2f}s)")
                                 else:
-                                    # On the last attempt, proceed anyway
+                                    # Last attempt - proceed with whatever we have
                                     logging.info("Final attempt - proceeding with available content")
+                                    break
+                            except Exception as final_err:
+                                if nav_attempt < 2:
+                                    logging.warning(f"Complete loading failure: {final_err}")
+                                else:
+                                    logging.info("Final attempt - proceeding with whatever we have")
                                     break
                             except Exception as wait_err2:
                                 if nav_attempt < 2:  # Only log and retry if not on last attempt
@@ -703,6 +925,7 @@ def scrape_and_filter_items(driver):
 active_chrome_driver = None
 
 def terminate_all_chrome_processes():
+    """Force terminate all Chrome/Chromium processes for clean shutdown"""
     """Force kill all Chrome/Chromium processes that might have been started by this script"""
     try:
         logging.info("Terminating all Chrome/Chromium browser processes")
@@ -742,6 +965,7 @@ def terminate_all_chrome_processes():
         logging.error(f"Error terminating Chrome processes: {e}")
 
 def cleanup_on_exit():
+    """Cleanup function executed on script termination"""
     """Cleanup function that runs when the script exits for any reason"""
     global active_chrome_driver
     try:
@@ -768,6 +992,7 @@ atexit.register(cleanup_on_exit)
 
 # Register signal handlers for proper termination on SIGTERM/SIGINT
 def signal_handler(sig, frame):
+    """Handle termination signals gracefully"""
     logging.info(f"Received signal {sig}, initiating shutdown")
     cleanup_on_exit()
     sys.exit(0)
@@ -778,6 +1003,7 @@ if not sys.platform.startswith('win'):
     signal.signal(signal.SIGINT, signal_handler)
 
 def clean_system_resources(driver=None):
+    """Clean up system resources to prevent memory leaks and optimize performance"""
     """Clean up system resources to prevent memory leaks and disk space issues
     
     Args:
